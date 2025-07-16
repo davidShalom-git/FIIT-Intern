@@ -168,7 +168,7 @@ app.use('*', (req, res) => {
     message: 'Route not found',
     path: req.originalUrl,
     method: req.method,
-    availableRoutes: ['/api', '/api/test', '/api/db-status', '/api/load-routes']
+    availableRoutes: ['/api', '/api/test', '/api/db-status', '/api/load-routes','/api/auth', '/api/chat']
   });
 });
 
