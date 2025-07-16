@@ -89,7 +89,7 @@ export function AuthProvider({ children }) {
 
   const fetchUser = async () => {
     try {
-      const response = await axios.get('/api/auth/me');
+      const response = await axios.get('https://fiit-intern.vercel.app/api/auth/me');
       if (!response.data || !response.data.user) {
         throw new Error('Invalid user data received');
       }
@@ -121,7 +121,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
+      const response = await axios.post('https://fiit-intern.vercel.app/api/auth/login', { email, password });
       
       if (!response.data || !response.data.token || !response.data.user) {
         throw new Error('Invalid response format from server');
@@ -154,7 +154,7 @@ export function AuthProvider({ children }) {
 
   const register = async (username, email, password) => {
     try {
-      const response = await axios.post('/api/auth/register', {
+      const response = await axios.post('https://fiit-intern.vercel.app/api/auth/register', {
         username,
         email,
         password

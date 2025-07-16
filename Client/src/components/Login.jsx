@@ -11,7 +11,8 @@ function Login() {
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors } } = useForm();
 
-  const onSubmit = async (data) => {
+const onSubmit = async (data) => {
+  try {
     setLoading(true);
     const result = await login(data.email, data.password);
     
@@ -19,11 +20,14 @@ function Login() {
       toast.success('Login successful!');
       navigate('/dashboard');
     } else {
-      toast.error(result.message);
+      toast.error(result.message || 'Invalid credentials');
     }
-    
+  } catch (error) {
+    toast.error('Invalid credentials');
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
