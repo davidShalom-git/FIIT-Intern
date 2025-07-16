@@ -36,7 +36,7 @@ function Dashboard() {
 
   const fetchChatHistory = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/chat/history?limit=10');
+      const response = await axios.get('https://fiit-intern.vercel.app/api/chat/history?limit=10');
       setHistory(response.data.data.chats);
     } catch (error) {
       console.error('Error fetching chat history:', error);
@@ -58,8 +58,8 @@ function Dashboard() {
 
     try {
       const endpoint = chatType === 'text' 
-        ? 'http://localhost:5000/api/chat/text' 
-        : 'http://localhost:5000/api/chat/image';
+        ? 'https://fiit-intern.vercel.app/api/chat/text' 
+        : 'https://fiit-intern.vercel.app/api/chat/image';
 
       // Add request headers and log request data
       const config = {
@@ -138,7 +138,7 @@ function Dashboard() {
 
   const deleteHistoryItem = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/chat/${id}`);
+      await axios.delete(`https://fiit-intern.vercel.app/api/chat/${id}`);
       fetchChatHistory();
       toast.success('Chat deleted');
     } catch (error) {

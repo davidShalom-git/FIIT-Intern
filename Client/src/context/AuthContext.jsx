@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
 
 // Set default axios config
-axios.defaults.baseURL = 'http://localhost:5000';
+axios.defaults.baseURL = 'https://fiit-intern.vercel.app';
 
 const AuthContext = createContext();
 
