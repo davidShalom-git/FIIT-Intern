@@ -5,17 +5,12 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const authRoutes = require('./routes/auth');
-const chatRoutes = require('./routes/chat');
-
 const app = express();
 
-// Middleware
+// Basic middleware first
 app.use(helmet());
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || true 
-    : 'http://localhost:3000',
+  origin: true, // Allow all origins for now
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -28,25 +23,51 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Health check route
+// Health check route - this should work first
 app.get('/api', (req, res) => {
-  res.json({ message: 'API is working!', timestamp: new Date().toISOString() });
+  res.json({ 
+    message: 'API is working!', 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+  });
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes);
+// Test route without database
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Test route working!' });
+});
 
-// MongoDB connection with connection pooling for serverless
-let cachedConnection = null;
+// Import routes only if they exist
+let authRoutes, chatRoutes;
+try {
+  authRoutes = require('./routes/auth');
+  chatRoutes = require('./routes/chat');
+  
+  // Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/chat', chatRoutes);
+} catch (err) {
+  console.error('Error loading routes:', err);
+  app.get('/api/routes-error', (req, res) => {
+    res.status(500).json({ error: 'Routes loading failed', details: err.message });
+  });
+}
 
-async function connectToDatabase() {
-  if (cachedConnection) {
-    return cachedConnection;
+// MongoDB connection with better error handling
+let isConnected = false;
+
+const connectToDatabase = async () => {
+  if (isConnected) {
+    return;
   }
 
   try {
-    const connection = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/claude-chatbot', {
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI environment variable is not set');
+    }
+
+    await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       bufferCommands: false,
@@ -56,27 +77,59 @@ async function connectToDatabase() {
       socketTimeoutMS: 45000,
     });
     
-    cachedConnection = connection;
-    console.log('MongoDB connected');
-    return connection;
+    isConnected = true;
+    console.log('MongoDB connected successfully');
   } catch (err) {
     console.error('MongoDB connection error:', err);
-    throw err;
+    isConnected = false;
+    // Don't throw error, let the app start without DB for debugging
   }
-}
+};
 
-// Connect to database when app starts
-connectToDatabase();
+// Database status route
+app.get('/api/db-status', async (req, res) => {
+  try {
+    await connectToDatabase();
+    res.json({ 
+      connected: isConnected,
+      readyState: mongoose.connection.readyState,
+      mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      connected: false, 
+      error: err.message,
+      mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+    });
+  }
+});
+
+// Connect to database on startup (non-blocking)
+connectToDatabase().catch(console.error);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!', error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error' });
+  console.error('Error details:', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method
+  });
+  
+  res.status(500).json({ 
+    message: 'Something went wrong!', 
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Handle 404 routes
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  res.status(404).json({ 
+    message: 'Route not found',
+    path: req.originalUrl,
+    method: req.method
+  });
 });
 
 // Export the app for Vercel
