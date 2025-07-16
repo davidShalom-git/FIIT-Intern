@@ -201,7 +201,7 @@ export function AuthProvider({ children }) {
     }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
 
 export function useAuth() {
