@@ -7,10 +7,12 @@ require('dotenv').config();
 
 const app = express();
 
-// Basic middleware first
+// Basic middleware
 app.use(helmet());
 app.use(cors({
-  origin: true, // Allow all origins for now
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL || true 
+    : 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -23,43 +25,28 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Health check route - this should work first
+// Health check route
 app.get('/api', (req, res) => {
   res.json({ 
     message: 'API is working!', 
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
-    mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+    nodeVersion: process.version,
+    mongooseVersion: mongoose.version
   });
 });
 
-// Test route without database
+// Test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Test route working!' });
 });
 
-// Import routes only if they exist
-let authRoutes, chatRoutes;
-try {
-  authRoutes = require('./routes/auth');
-  chatRoutes = require('./routes/chat');
-  
-  // Routes
-  app.use('/api/auth', authRoutes);
-  app.use('/api/chat', chatRoutes);
-} catch (err) {
-  console.error('Error loading routes:', err);
-  app.get('/api/routes-error', (req, res) => {
-    res.status(500).json({ error: 'Routes loading failed', details: err.message });
-  });
-}
-
-// MongoDB connection with better error handling
+// MongoDB connection for Vercel (optimized for serverless)
 let isConnected = false;
 
 const connectToDatabase = async () => {
-  if (isConnected) {
-    return;
+  if (isConnected && mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
 
   try {
@@ -67,7 +54,12 @@ const connectToDatabase = async () => {
       throw new Error('MONGODB_URI environment variable is not set');
     }
 
-    await mongoose.connect(process.env.MONGODB_URI, {
+    // Close existing connection if any
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.connection.close();
+    }
+
+    const connection = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
       bufferCommands: false,
@@ -75,14 +67,16 @@ const connectToDatabase = async () => {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
+      family: 4, // Use IPv4, skip trying IPv6
     });
     
     isConnected = true;
     console.log('MongoDB connected successfully');
+    return connection;
   } catch (err) {
     console.error('MongoDB connection error:', err);
     isConnected = false;
-    // Don't throw error, let the app start without DB for debugging
+    throw err;
   }
 };
 
@@ -93,7 +87,9 @@ app.get('/api/db-status', async (req, res) => {
     res.json({ 
       connected: isConnected,
       readyState: mongoose.connection.readyState,
-      mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET'
+      mongoUri: process.env.MONGODB_URI ? 'SET' : 'NOT SET',
+      host: mongoose.connection.host,
+      name: mongoose.connection.name
     });
   } catch (err) {
     res.status(500).json({ 
@@ -104,8 +100,48 @@ app.get('/api/db-status', async (req, res) => {
   }
 });
 
-// Connect to database on startup (non-blocking)
-connectToDatabase().catch(console.error);
+// Load routes after ensuring database connection
+let routesLoaded = false;
+
+const loadRoutes = async () => {
+  if (routesLoaded) return;
+
+  try {
+    await connectToDatabase();
+    
+    // Import and use routes
+    const authRoutes = require('./routes/auth');
+    const chatRoutes = require('./routes/chat');
+    
+    app.use('/api/auth', authRoutes);
+    app.use('/api/chat', chatRoutes);
+    
+    routesLoaded = true;
+    console.log('Routes loaded successfully');
+  } catch (err) {
+    console.error('Error loading routes:', err);
+    // Create fallback routes
+    app.get('/api/auth/status', (req, res) => {
+      res.status(500).json({ error: 'Auth routes not loaded', details: err.message });
+    });
+    app.get('/api/chat/status', (req, res) => {
+      res.status(500).json({ error: 'Chat routes not loaded', details: err.message });
+    });
+  }
+};
+
+// Load routes on startup
+loadRoutes();
+
+// Manual route loading endpoint for debugging
+app.get('/api/load-routes', async (req, res) => {
+  try {
+    await loadRoutes();
+    res.json({ message: 'Routes loaded successfully', routesLoaded });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to load routes', details: err.message });
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -113,7 +149,8 @@ app.use((err, req, res, next) => {
     message: err.message,
     stack: err.stack,
     url: req.url,
-    method: req.method
+    method: req.method,
+    timestamp: new Date().toISOString()
   });
   
   res.status(500).json({ 
@@ -128,7 +165,8 @@ app.use('*', (req, res) => {
   res.status(404).json({ 
     message: 'Route not found',
     path: req.originalUrl,
-    method: req.method
+    method: req.method,
+    availableRoutes: ['/api', '/api/test', '/api/db-status', '/api/load-routes']
   });
 });
 
