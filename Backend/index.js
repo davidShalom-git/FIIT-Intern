@@ -44,59 +44,18 @@ app.get('/api/test', (req, res) => {
 });
 
 // MongoDB connection for Vercel (optimized for serverless)
-let isConnected = false;
-
-const connectToDatabase = async () => {
-  if (isConnected && mongoose.connection.readyState === 1) {
-    return mongoose.connection;
-  }
-
-  try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI environment variable is not set');
-    }
-
-    // Close existing connection if any
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close();
-    }
-
-    const connection = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      bufferCommands: false,
-      bufferMaxEntries: 0,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-      family: 4, 
-    });
-    
-    isConnected = true;
-    console.log('MongoDB connected successfully');
-    return connection;
-  } catch (err) {
-    console.error('MongoDB connection error:', err);
-    isConnected = false;
-    throw err;
-  }
-};
-
-
-
-// Connect to MongoDB
-connectToDatabase().catch(err => {
-  console.error('Failed to connect to MongoDB:', err);
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4, // Use IPv4, skip trying IPv6
+}).then(() => {
+  console.log('MongoDB connected successfully');
+}).catch(err => {
+  console.error('MongoDB connection error:', err);
 });
-app.use(async (req, res, next) => {
-  try {
-    await connectToDatabase();
-    next();
-  } catch (err) {
-    res.status(500).json({ message: 'Database connection error', error: err.message });
-  }
-});
-
 
 
 app.use('/api/auth', auth);
