@@ -4,6 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
+const auth = require('./routes/auth')
+const chat = require('./routes/chat');
 
 const app = express();
 
@@ -169,6 +171,9 @@ app.use('*', (req, res) => {
     availableRoutes: ['/api', '/api/test', '/api/db-status', '/api/load-routes']
   });
 });
+
+app.use('/api/auth', auth);
+app.use('/api/chat', chat);
 
 // Export the app for Vercel
 module.exports = app;
