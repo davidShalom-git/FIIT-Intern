@@ -84,6 +84,21 @@ const connectToDatabase = async () => {
 
 
 
+// Connect to MongoDB
+connectToDatabase().catch(err => {
+  console.error('Failed to connect to MongoDB:', err);
+});
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (err) {
+    res.status(500).json({ message: 'Database connection error', error: err.message });
+  }
+});
+
+
+
 app.use('/api/auth', auth);
 app.use('/api/chat', chat);
 
