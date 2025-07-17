@@ -62,12 +62,9 @@ app.use('/api/auth', auth);
 app.use('/api/chat', chat);
 
 // Export the app for Vercel
-module.exports = app;
+
 
 // Only listen on port if not in production (for local development)
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
+app.listen(process.env.PORT || 5000, () => {
+  console.log(`Server is running on port ${process.env.PORT || 5000}`);
+});
